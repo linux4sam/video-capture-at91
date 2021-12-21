@@ -13,7 +13,10 @@ Scripts are written in shell, can be run using the standard _sh_ shell.
 2 Usage
 ================================================================================
 
-Scripts can be run directly from command line
+Scripts can be run directly from command line.
+The root file system dedicated to a specific target board should only
+install the specific board scripts.
+The scripts are held in a \<MPU\>/\<sensor\>/ directory tree.
 
 3 Contributing
 ================================================================================
@@ -39,12 +42,12 @@ Eugen Hristev <eugen.hristev@microchip.com>
 When creating patches insert the [video-capture-at91] tag in the subject,
 for example use something like:
 
-    git format-patch -s --subject-prefix='dt-overlay-at91][PATCH' <origin>
+    git format-patch -s --subject-prefix='video-capture-at91][PATCH' <origin>
 
 9 License
 ================================================================================
 
-AT91Bootstrap is licensed under the MIT license.
+Video-capture-at91 is licensed under the MIT license.
 
 License text file is available under LICENSES directory in the source code tree.
 
