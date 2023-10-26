@@ -4,6 +4,12 @@ version() {
 	echo "$@" | awk -F. '{ printf("%03d%03d%03d\n", $1,$2,$3); }'
 }
 
+get_entity_name() {
+        local sensor_name=$(media-ctl -p  | grep "entity" | grep $1 | cut -f 4 -d ' ')
+        local sensor_num=$(media-ctl -p  | grep "entity" | grep $1 | cut -f 5 -d ' ')
+        printf "%s %s" ${sensor_name} ${sensor_num}
+}
+
 get_scaler_name() {
 	local kernel_version=$(uname -r | awk -F- '{print $1}')
 	local kernel_extraversion=$(uname -r | awk -F- '{print $2}')
