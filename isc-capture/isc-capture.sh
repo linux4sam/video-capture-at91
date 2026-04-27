@@ -9,6 +9,7 @@
 # =============================================================================
 
 set -e  # Exit on error (except where explicitly handled)
+umask 0027
 
 # =============================================================================
 # DEFAULTS (override via environment or args)
@@ -28,7 +29,7 @@ set -e  # Exit on error (except where explicitly handled)
 : ${MBUS_FMT:=SRGGB10_1X10}         # Default: IMX219 Bayer format
 
 LOCKFILE=/tmp/isc-capture.lock
-LOG=/tmp/isc_$$.log
+LOG=$(mktemp /tmp/isc_XXXXXX.log) || { echo "ERROR: mktemp failed" >&2; exit 1; }
 QUICK_MODE=0
 DIAGNOSE_MODE=0
 REMOTE_ONLY=0
@@ -219,6 +220,10 @@ case $N in ''|*[!0-9]*|0) die "Invalid -n: $N" 2 ;; esac
 case $PATTERN in [0-4]) ;; *) die "Invalid -p: $PATTERN (0-4)" 2 ;; esac
 case $KEEP in ''|*[!0-9]*) die "Invalid -k: $KEEP" 2 ;; esac
 
+case $MBUS_FMT in
+    *[!A-Za-z0-9_]*) die "invalid -m: $MBUS_FMT" 2 ;;
+esac
+
 # Check dependencies
 for cmd in fswebcam v4l2-ctl media-ctl; do
     command -v "$cmd" >/dev/null || die "Missing: $cmd" 2
@@ -231,13 +236,12 @@ done
 
 # Acquire lock
 if command -v flock >/dev/null 2>&1; then
-    exec 200>"$LOCKFILE"
+    (set -C; : >"$LOCKFILE") 2>/dev/null || die "Already running (locked)" 2
+    exec 200>>"$LOCKFILE"
     flock -n 200 || die "Already running (locked)" 2
+    exec 200>&-
 else
-    # Fallback to mkdir (atomic on most filesystems)
-    if ! mkdir "$LOCKFILE" 2>/dev/null; then
-        die "Already running (locked)" 2
-    fi
+    mkdir "$LOCKFILE" 2>/dev/null || die "Already running (locked)" 2
 fi
 
 trap cleanup EXIT HUP INT TERM
@@ -516,13 +520,14 @@ EOF
         HOST=${REMOTE%:*}
         RPATH=${REMOTE#*:}
 
-        if ssh -o BatchMode=yes "$HOST" "mkdir -p $RPATH/test${run}_$$" 2>/dev/null && \
+        if ssh -o BatchMode=yes -o ConnectTimeout=30 "$HOST" \
+               "mkdir -p '${RPATH}/test${run}_$$'" \
+               >/dev/null 2>&1 && \
            scp -q "$TEST_DIR"/* "$REMOTE/test${run}_$$/" 2>/dev/null; then
             # Verify
             cnt_local=$(find "$TEST_DIR" -maxdepth 1 -name "*.png" | wc -l | tr -d ' ')
-            cnt_remote=$(ssh -o BatchMode=yes "$HOST" \
-                sh -c 'find "\$1" -maxdepth 1 -name "*.png" | wc -l' \
-                -- "${RPATH}/test${run}_$$" \
+            cnt_remote=$(ssh -o BatchMode=yes -o ConnectTimeout=30 "$HOST" \
+                "find '${RPATH}/test${run}_$$' -maxdepth 1 -name '*.png' | wc -l" \
                 2>/dev/null | tr -d ' ') || cnt_remote=0
             : "${cnt_remote:=0}"
 
