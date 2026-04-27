@@ -46,7 +46,6 @@ cleanup() {
     if [ -n "$SENSOR_DEV" ] && [ -c "$SENSOR_DEV" ]; then
         v4l2-ctl -d "$SENSOR_DEV" --set-ctrl test_pattern=0 2>/dev/null || true
     fi
-    v4l2-ctl -d "$VIDEO_DEV" --stream-off 2>/dev/null || true
     rm -f "$LOG"
     # Clean up lock (both flock and mkdir variants)
     if [ -d "$LOCKFILE" ]; then
@@ -252,9 +251,6 @@ else
     mkdir -p "$STORAGE" || die "Cannot create temp $STORAGE" 4
 fi
 
-# Reset device
-v4l2-ctl -d "$VIDEO_DEV" --stream-off 2>/dev/null || true
-sleep 0.1
 
 # =============================================================================
 # HARDWARE DETECTION
@@ -464,12 +460,9 @@ EOF
 
             out="$TEST_DIR/${pfx}_${disp}_${fswfmt}_test${run}_$$.png"
 
-            # Set format
-            if [ "$v4l2fmt" = "Y16" ]; then
-                v4l2-ctl -d "$VIDEO_DEV" -v "pixelformat=Y16 ,height=$vh,width=$vw" 2>/dev/null
-            else
-                v4l2-ctl -d "$VIDEO_DEV" -v "pixelformat=$v4l2fmt,height=$vh,width=$vw" 2>/dev/null
-            fi
+            v4l2-ctl -d "$VIDEO_DEV" \
+                --set-fmt-video "width=${vw},height=${vh},pixelformat=${v4l2fmt}" \
+                >/dev/null 2>&1 || true
 
             # Capture (skip frames based on pattern)
             skip=$SKIP
