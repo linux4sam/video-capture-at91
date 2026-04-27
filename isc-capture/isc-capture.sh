@@ -548,7 +548,6 @@ done
 # CLEANUP & SUMMARY
 # =============================================================================
 
-# Keep last N (note: while-read runs in subshell, rm failures are not fatal)
 if [ "$KEEP" -gt 0 ] && [ "$REMOTE_ONLY" -eq 0 ]; then
     count=0
     for d in "$STORAGE"/test[0-9]*_*; do
@@ -557,9 +556,12 @@ if [ "$KEEP" -gt 0 ] && [ "$REMOTE_ONLY" -eq 0 ]; then
 
     if [ "$count" -gt "$KEEP" ]; then
         delete=$((count - KEEP))
-        log "Cleaning up $delete old tests"
-        ls -dt "$STORAGE"/test[0-9]*_* 2>/dev/null | tail -n $delete | while read d; do
-            rm -rf "$d"
+        log "Pruning $delete old run(s)"
+        OLD_DIRS=$(find "$STORAGE" -maxdepth 1 -type d -name "test[0-9]*_*" \
+            -printf "%T@ %p\n" 2>/dev/null | sort -n | head -n "$delete" \
+            | while IFS= read -r line; do printf '%s\n' "${line#* }"; done)
+        for d in $OLD_DIRS; do
+            [ -d "$d" ] && rm -rf "$d" && log "  removed $d"
         done
     fi
 fi
