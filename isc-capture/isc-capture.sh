@@ -27,7 +27,7 @@ set -e  # Exit on error (except where explicitly handled)
 : ${SENSOR:=}                       # Auto-detect if empty
 : ${MBUS_FMT:=SRGGB10_1X10}         # Default: IMX219 Bayer format
 
-LOCKFILE=/var/lock/isc-capture.lock
+LOCKFILE=/tmp/isc-capture.lock
 LOG=/tmp/isc_$$.log
 QUICK_MODE=0
 DIAGNOSE_MODE=0
@@ -111,11 +111,11 @@ YU12       YUV420P      4:2:0 YUV planar
 ========================================================================
 Resolution   Use Case
 -----------  -------------------------------------------------------
-640×480      Low-res testing, quick validation
-1640×1232    Panoramic aspect ratio
-1920×1080    Full HD (common application target)
-2560×1920    High resolution (platform dependent)
-3264×2464    Maximum resolution (platform dependent)
+640x480      Low-res testing, quick validation
+1640x1232    Panoramic aspect ratio
+1920x1080    Full HD (common application target)
+2560x1920    High resolution (platform dependent)
+3264x2464    Maximum resolution (platform dependent)
 
 Note: Maximum resolution is auto-detected from SoC device tree.
 ========================================================================
@@ -132,7 +132,7 @@ diagnose() {
     # Board info
     echo "=== Board Information ==="
     if [ -e /sys/firmware/devicetree/base/compatible ]; then
-        echo "Board: $(cat /sys/firmware/devicetree/base/compatible | tr '\0' ' ')"
+        echo "Board: $(tr '\0' ' ' < /sys/firmware/devicetree/base/compatible)"
     fi
     echo "Kernel: $(uname -r)"
     echo "Arch: $(uname -m)"
@@ -221,7 +221,7 @@ case $KEEP in ''|*[!0-9]*) die "Invalid -k: $KEEP" 2 ;; esac
 
 # Check dependencies
 for cmd in fswebcam v4l2-ctl media-ctl; do
-    command -v $cmd >/dev/null || die "Missing: $cmd" 2
+    command -v "$cmd" >/dev/null || die "Missing: $cmd" 2
 done
 [ -n "$REMOTE" ] && { command -v scp >/dev/null || die "Missing: scp" 2; }
 
@@ -240,7 +240,7 @@ else
     fi
 fi
 
-trap cleanup EXIT INT TERM
+trap cleanup EXIT HUP INT TERM
 
 # Create storage (unless remote-only)
 if [ "$REMOTE_ONLY" -eq 0 ]; then
@@ -302,8 +302,8 @@ fi
 
 # Detect CSI entities (optional)
 TOPO=$(media-ctl -d "$MEDIA_DEV" -p 2>/dev/null)
-CSI=$(echo "$TOPO" | awk '/^- entity/ && /dw-csi/ {sub(/^- entity [0-9]+: /,""); sub(/ \(.*/,""); print; exit}')
-CSI2DC=$(echo "$TOPO" | awk '/^- entity/ && /csi2dc/ {sub(/^- entity [0-9]+: /,""); sub(/ \(.*/,""); print; exit}')
+CSI=$(printf '%s\n' "$TOPO" | awk '/^- entity/ && /dw-csi/ {sub(/^- entity [0-9]+: /,""); sub(/ \(.*/,""); print; exit}')
+CSI2DC=$(printf '%s\n' "$TOPO" | awk '/^- entity/ && /csi2dc/ {sub(/^- entity [0-9]+: /,""); sub(/ \(.*/,""); print; exit}')
 
 # =============================================================================
 # FORMAT & RESOLUTION LISTS
@@ -387,7 +387,7 @@ if [ -n "$REMOTE" ]; then
     case $REMOTE in
         *:*) ;;
         *@*) REMOTE="$REMOTE:~/isc_captures" ;;
-        *) REMOTE="$(whoami)@$REMOTE:~/isc_captures" ;;
+        *) REMOTE="$(id -un)@$REMOTE:~/isc_captures" ;;
     esac
     # Preflight SSH connectivity
     HOST=${REMOTE%:*}
@@ -428,7 +428,8 @@ FAIL=0
 # CAPTURE LOOP
 # =============================================================================
 
-for run in $(seq $NEXT $((NEXT + N - 1))); do
+run=$NEXT
+while [ "$run" -le $((NEXT + N - 1)) ]; do
     TEST_DIR="$STORAGE/test${run}_$$"
     mkdir -p "$TEST_DIR"
 
@@ -473,11 +474,11 @@ EOF
             [ "$PATTERN" -ne 0 ] && skip=2
 
             # Run capture with explicit timeout handling
-            if timeout $TIMEOUT fswebcam -d "$VIDEO_DEV" -p "$fswfmt" \
-                -r ${vw}x${vh} -S $skip "$out" >"$LOG" 2>&1; then
+            if timeout "$TIMEOUT" fswebcam -d "$VIDEO_DEV" -p "$fswfmt" \
+                -r "${vw}x${vh}" -S "$skip" "$out" >"$LOG" 2>&1; then
                 # Check if file was created and has content
                 if [ -s "$out" ]; then
-                    size=$(stat -c%s "$out" 2>/dev/null || wc -c < "$out")
+                    size=$(wc -c < "$out" | tr -d ' ')
                     printf "    %-10s %-8s OK (%d bytes)\n" "$disp" "$fswfmt" "$size"
                     PASS=$((PASS + 1))
                     RUN_PASS=$((RUN_PASS + 1))
@@ -540,6 +541,7 @@ EOF
 
     log "Run $run: pass=$RUN_PASS fail=$RUN_FAIL"
     echo
+    run=$((run + 1))
 done
 
 # =============================================================================
