@@ -38,7 +38,7 @@ LIST_FORMATS=0
 # CORE FUNCTIONS
 # =============================================================================
 
-die() { echo "ERROR: $*" >&2; cleanup; exit "${2:-1}"; }
+die() { echo "ERROR: $*" >&2; exit "${2:-1}"; }
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 
 cleanup() {
@@ -283,7 +283,7 @@ done
 MAX_W=9999
 MAX_H=9999
 if [ -e /sys/firmware/devicetree/base/compatible ]; then
-    read COMPAT < /sys/firmware/devicetree/base/compatible
+    COMPAT=$(tr -d '\0' < /sys/firmware/devicetree/base/compatible)
     case $COMPAT in
         *sama5d2*) MAX_W=1920; MAX_H=1080 ;;
         *sama7g5*) MAX_W=3264; MAX_H=2464 ;;
@@ -372,10 +372,14 @@ fi
 if [ "$PATTERN" -ne 0 ]; then
     # Retry up to 3 times with delay - sensor may need time after driver probe
     # or previous stream termination before accepting test_pattern control
-    for i in 1 2 3; do
-        v4l2-ctl -d "$SENSOR_DEV" --set-ctrl test_pattern=$PATTERN 2>/dev/null && break
-        [ $i -lt 3 ] && sleep 0.5
+    i=1
+    while [ "$i" -le 3 ]; do
+        v4l2-ctl -d "$SENSOR_DEV" \
+            --set-ctrl test_pattern="$PATTERN" >/dev/null 2>&1 && break
+        [ "$i" -lt 3 ] && sleep 1
+        i=$((i + 1))
     done
+    [ "$i" -gt 3 ] && log "WARNING: test_pattern=$PATTERN did not apply"
 fi
 
 # Normalize remote
@@ -514,10 +518,14 @@ EOF
         if ssh -o BatchMode=yes "$HOST" "mkdir -p $RPATH/test${run}_$$" 2>/dev/null && \
            scp -q "$TEST_DIR"/* "$REMOTE/test${run}_$$/" 2>/dev/null; then
             # Verify
-            cnt_local=$(ls "$TEST_DIR"/*.png 2>/dev/null | wc -l)
-            cnt_remote=$(ssh -o BatchMode=yes "$HOST" "ls $RPATH/test${run}_$$/*.png 2>/dev/null | wc -l" 2>/dev/null)
+            cnt_local=$(find "$TEST_DIR" -maxdepth 1 -name "*.png" | wc -l | tr -d ' ')
+            cnt_remote=$(ssh -o BatchMode=yes "$HOST" \
+                sh -c 'find "\$1" -maxdepth 1 -name "*.png" | wc -l' \
+                -- "${RPATH}/test${run}_$$" \
+                2>/dev/null | tr -d ' ') || cnt_remote=0
+            : "${cnt_remote:=0}"
 
-            if [ "$cnt_local" = "$cnt_remote" ]; then
+            if [ "$cnt_local" -eq "$cnt_remote" ]; then
                 log "Remote copy verified ($cnt_local files)"
                 # Delete local copy if remote-only mode
                 [ "$REMOTE_ONLY" -eq 1 ] && rm -rf "$TEST_DIR"
@@ -555,7 +563,9 @@ if [ "$KEEP" -gt 0 ] && [ "$REMOTE_ONLY" -eq 0 ]; then
 fi
 
 # Cleanup temp storage if remote-only
-[ "$REMOTE_ONLY" -eq 1 ] && rm -rf "$STORAGE"
+if [ "$REMOTE_ONLY" -eq 1 ]; then
+    rm -rf "$STORAGE" || true
+fi
 
 echo "========================================================================="
 echo " Complete: $N runs"
