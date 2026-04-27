@@ -292,9 +292,9 @@ if [ -e /sys/firmware/devicetree/base/compatible ]; then
 fi
 
 # Get scaler name (kernel version dependent)
-KVER=$(uname -r | sed 's/-rc.*//' | cut -d- -f1)
-KMAJ=${KVER%%.*}; KMIN=${KVER#*.}; KMIN=${KMIN%%.*}
-if [ "$KMAJ" -ge 6 ] && [ "$KMIN" -ge 2 ]; then
+KVER=$(uname -r | sed 's/^\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/')
+KMAJ=${KVER%%.*}; KREST=${KVER#*.}; KMIN=${KREST%%.*}
+if [ "$KMAJ" -gt 6 ] || { [ "$KMAJ" -eq 6 ] && [ "$KMIN" -ge 2 ]; }; then
     SCALER=microchip_isc_scaler
 else
     SCALER=atmel_isc_scaler
