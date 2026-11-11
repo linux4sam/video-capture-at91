@@ -467,7 +467,7 @@ EOF
             v4l2fmt=${fmt_entry%:*}
             fswfmt=${fmt_entry#*:}
 
-            out="$TEST_DIR/${pfx}_${disp}_${fswfmt}_test${run}_$$.png"
+            out="$TEST_DIR/${pfx}_${disp}_${fswfmt}_test${run}_$$.jpeg"
 
             v4l2-ctl -d "$VIDEO_DEV" \
                 --set-fmt-video "width=${vw},height=${vh},pixelformat=${v4l2fmt}" \
@@ -478,7 +478,7 @@ EOF
             [ "$PATTERN" -ne 0 ] && skip=2
 
             # Run capture with explicit timeout handling
-            if timeout "$TIMEOUT" fswebcam -d "$VIDEO_DEV" -p "$fswfmt" \
+            if timeout "$TIMEOUT" fswebcam -d "$VIDEO_DEV" -p "$fswfmt" --jpeg 95 \
                 -r "${vw}x${vh}" -S "$skip" "$out" >"$LOG" 2>&1; then
                 # Check if file was created and has content
                 if [ -s "$out" ]; then
@@ -525,9 +525,9 @@ EOF
                >/dev/null 2>&1 && \
            scp -q "$TEST_DIR"/* "$REMOTE/test${run}_$$/" 2>/dev/null; then
             # Verify
-            cnt_local=$(find "$TEST_DIR" -maxdepth 1 -name "*.png" | wc -l | tr -d ' ')
+            cnt_local=$(find "$TEST_DIR" -maxdepth 1 -name "*.jpeg" | wc -l | tr -d ' ')
             cnt_remote=$(ssh -o BatchMode=yes -o ConnectTimeout=30 "$HOST" \
-                "find '${RPATH}/test${run}_$$' -maxdepth 1 -name '*.png' | wc -l" \
+                "find '${RPATH}/test${run}_$$' -maxdepth 1 -name '*.jpeg' | wc -l" \
                 2>/dev/null | tr -d ' ') || cnt_remote=0
             : "${cnt_remote:=0}"
 
