@@ -29,7 +29,7 @@ umask 0027
 : ${MBUS_FMT:=SRGGB10_1X10}         # Default: IMX219 Bayer format
 
 LOCKFILE=/tmp/isc-capture.lock
-LOG=$(mktemp /tmp/isc_XXXXXX.log) || { echo "ERROR: mktemp failed" >&2; exit 1; }
+LOG=$(mktemp /tmp/isc_XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
 QUICK_MODE=0
 DIAGNOSE_MODE=0
 REMOTE_ONLY=0
